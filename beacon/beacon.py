@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
 import OpenSSL
+import pam
 import json
 import socket
 import SocketServer
+import subprocess
 
 class BeaconServer(SocketServer.ThreadingTCPServer):
 	def __init__(self, server_address, RequestHandlerClass, bind_and_activate=True):
@@ -27,30 +29,61 @@ class BeaconServer(SocketServer.ThreadingTCPServer):
 class Decoder(SocketServer.BaseRequestHandler):
 	def handle(self):
 		data = json.loads(self.request.recv(1024).strip())
-		if data['request'] == 'genesis':
+		if data['request'] == 'status':
+			hostname = subprocess.check_output(
+				['cat', '/etc/hostname']).strip('\n')
+			status = subprocess.check_output(
+				['systemctl', 'is-active', 'genesis']).strip('\n')
 			self.request.sendall(json.dumps({
 				'response': 'ok',
-				'gen_status': gen_status,
-				'gen_version': gen_version,
+				'name': hostname,
+				'status': status,
 				}))
-		elif data['request'] == 'gen_reboot':
-			self.request.sendall(json.dumps({
-				'response': 'ok',
-				}))
-			self.gen_reboot()
+		elif data['request'] == 'reload':
+			status = pam.authenticate(data['user'], data['pass'])
+			if status is True:
+				self.request.sendall(json.dumps({
+					'response': 'ok',
+					}))
+				gen_reboot()
+			else:
+				self.request.sendall(json.dumps({
+					'response': 'fail',
+					}))
 		elif data['request'] == 'shutdown':
-			self.request.sendall(json.dumps({
-				'response': 'ok',
-				}))
-			self.shutdown()
+			status = pam.authenticate(data['user'], data['pass'])
+			if status is True:
+				self.request.sendall(json.dumps({
+					'response': 'ok',
+					}))
+				shutdown()
+			else:
+				self.request.sendall(json.dumps({
+					'response': 'fail',
+					}))
 		elif data['request'] == 'reboot':
-			self.request.sendall(json.dumps({
-				'response': 'ok',
-				}))
-			self.reboot()
+			status = pam.authenticate(data['user'], data['pass'])
+			if status is True:
+				self.request.sendall(json.dumps({
+					'response': 'ok',
+					}))
+				reboot()
+			else:
+				self.request.sendall(json.dumps({
+					'response': 'fail',
+					}))
 		elif data['request'] == 'ping':
 			self.request.sendall(json.dumps({'response': 'ok'}))
-		print data
+
+
+def shutdown():
+	subprocess.Popen(['halt'])
+
+def reload():
+	subprocess.Popen(['systemctl', 'restart', 'genesis'])
+
+def reboot():
+	subprocess.Popen(['reboot'])
 
 server = BeaconServer(('0.0.0.0', 8765), Decoder)
 server.serve_forever()

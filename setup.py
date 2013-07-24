@@ -6,7 +6,7 @@ from setuptools import find_packages
 setup(
     name='arkos-beacond',
     version='0.1',
-    install_requires=['pyOpenSSL'],
+    install_requires=['pyOpenSSL', 'pam'],
     description='Broadcasts arkOS presence and allows for lowlevel config',
     author='The CitizenWeb Project',
     author_email='jacob@citizenweb.is',

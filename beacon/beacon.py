@@ -1,9 +1,30 @@
 #!/usr/bin/env python
 
-import SocketServer
+import OpenSSL
 import json
+import socket
+import SocketServer
 
-class BeaconHandler(SocketServer.BaseRequestHandler):
+class BeaconServer(SocketServer.ThreadingTCPServer):
+	def __init__(self, server_address, RequestHandlerClass, bind_and_activate=True):
+		SocketServer.BaseServer.__init__(self, server_address,
+			RequestHandlerClass)
+		sslctx = OpenSSL.SSL.Context(OpenSSL.SSL.SSLv3_METHOD)
+		sslcert = 'cert.pem'
+		sslkey = 'prkey.key'
+		sslctx.use_privatekey_file(sslkey)
+		sslctx.use_certificate_file(sslcert)
+		self.socket = OpenSSL.SSL.Connection(sslctx, 
+			socket.socket(self.address_family, self.socket_type))
+		if bind_and_activate:
+			self.server_bind()
+			self.server_activate()
+
+	def shutdown_request(self, request):
+		request.shutdown()
+
+
+class Decoder(SocketServer.BaseRequestHandler):
 	def handle(self):
 		data = json.loads(self.request.recv(1024).strip())
 		if data['request'] == 'genesis':
@@ -29,7 +50,7 @@ class BeaconHandler(SocketServer.BaseRequestHandler):
 			self.reboot()
 		elif data['request'] == 'ping':
 			self.request.sendall(json.dumps({'response': 'ok'}))
+		print data
 
-server = SocketServer.ThreadingTCPServer(
-	('0.0.0.0', 13373), BeaconHandler)
+server = BeaconServer(('0.0.0.0', 8765), Decoder)
 server.serve_forever()

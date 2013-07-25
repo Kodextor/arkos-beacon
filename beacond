@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+
+import sys
+import getopt
+import os
+import ConfigParser
+
+from beacon.daemon import Daemon
+
+class BDaemon(Daemon):
+    def run(self):
+        from beacon.beacon import Beacon
+        Beacon()
+
+
+def usage():
+    print """
+arkOS Beacon (c) 2013 The CitizenWeb Project
+Usage: beacond [options]
+Options:
+    -d, --start         - Run in background (daemon mode)
+    -r, --restart       - Restart daemon
+    -s, --stop          - Stop daemon
+    -h, --help          - Show options
+    """
+
+
+if __name__ == '__main__':
+    reload(sys)
+    sys.setdefaultencoding('utf-8')
+    sys.dont_write_bytecode = True
+
+    config_file = ''
+
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], 'hc:drsv', ['help', 'config=', 'start', 'stop', 'restart'])
+    except getopt.GetoptError, e:
+        print str(e)
+        usage()
+        sys.exit(2)
+
+    action = 'run'
+
+    for o, a in opts:
+        if o in ('-h', '--help'):
+            usage()
+            sys.exit(0)
+        elif o in ('-c', '--config'):
+            if os.path.isfile(a):
+                config_file = a
+        elif o in ('-d', '--start'):
+            action = 'start'
+        elif o in ('-r', '--restart'):
+            action = 'restart'
+        elif o in ('-s', '--stop'):
+            action = 'stop'
+
+    if action == 'run':
+        from beacon.beacon import Beacon
+        Beacon()
+    else:
+        bd = BDaemon('/var/run/beacon.pid')
+
+        if 'start' == action:
+            bd.start()
+        elif 'stop' == action:
+            bd.stop()
+        elif 'restart' == action:
+            bd.restart()
+        else:
+            usage()
+            sys.exit(2)
+
+    sys.exit(0)

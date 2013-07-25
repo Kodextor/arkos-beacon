@@ -1,0 +1,11 @@
+[Unit]
+Description=arkOS Beacon
+
+[Service]
+ExecStart=/usr/bin/beacond -d
+ExecStop=/usr/bin/beacond -s
+Type=forking
+PIDFile=/var/run/beacon.pid
+
+[Install]
+WantedBy=multi-user.target

@@ -12,8 +12,8 @@ class BeaconServer(SocketServer.ThreadingTCPServer):
 		SocketServer.BaseServer.__init__(self, server_address,
 			RequestHandlerClass)
 		sslctx = OpenSSL.SSL.Context(OpenSSL.SSL.SSLv3_METHOD)
-		sslcert = 'cert.pem'
-		sslkey = 'prkey.key'
+		sslcert = '/etc/beacon/cert.pem'
+		sslkey = '/etc/beacon/pkey.key'
 		sslctx.use_privatekey_file(sslkey)
 		sslctx.use_certificate_file(sslcert)
 		self.socket = OpenSSL.SSL.Connection(sslctx, 
@@ -85,5 +85,7 @@ def reload():
 def reboot():
 	subprocess.Popen(['reboot'])
 
-server = BeaconServer(('0.0.0.0', 8765), Decoder)
-server.serve_forever()
+
+class Beacon():
+	server = BeaconServer(('0.0.0.0', 8765), Decoder)
+	server.serve_forever()

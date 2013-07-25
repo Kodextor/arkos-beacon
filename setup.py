@@ -15,7 +15,6 @@ setup(
     package_data={'': ['files/*.*', 'files/*/*.*', 'files/*/*/*.*', 'templates/*.*', 'widgets/*.*', 'layout/*.*']},
     scripts=['beacond'],
     data_files=[
-        ('/etc', ['beacon.conf']),
         ('/usr/lib/systemd/system', ['beacond.service']),
     ],
 )

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import OpenSSL
+import os
 import pam
 import json
 import socket
@@ -30,29 +31,29 @@ class Decoder(SocketServer.BaseRequestHandler):
 	def handle(self):
 		data = json.loads(self.request.recv(1024).strip())
 		if data['request'] == 'status':
-			hostname = subprocess.check_output(
-				['cat', '/etc/hostname']).strip('\n')
-			status = subprocess.check_output(
-				['systemctl', 'is-active', 'genesis']).strip('\n')
+			f = open('/etc/hostname')
+			if os.path.exists('/var/run/genesis.pid'):
+				status = 'active'
+			else:
+				status = 'inactive'
 			self.request.sendall(json.dumps({
 				'response': 'ok',
-				'name': hostname,
+				'name': f.readline().strip('\n'),
 				'status': status,
 				}))
+			f.close()
 		elif data['request'] == 'reload':
-			status = pam.authenticate(data['user'], data['pass'])
-			if status is True:
+			if pam.authenticate(data['user'], data['pass'], service='account'):
 				self.request.sendall(json.dumps({
 					'response': 'ok',
 					}))
-				gen_reboot()
+				reload()
 			else:
 				self.request.sendall(json.dumps({
 					'response': 'fail',
 					}))
 		elif data['request'] == 'shutdown':
-			status = pam.authenticate(data['user'], data['pass'])
-			if status is True:
+			if pam.authenticate(data['user'], data['pass'], service='account'):
 				self.request.sendall(json.dumps({
 					'response': 'ok',
 					}))
@@ -62,8 +63,7 @@ class Decoder(SocketServer.BaseRequestHandler):
 					'response': 'fail',
 					}))
 		elif data['request'] == 'reboot':
-			status = pam.authenticate(data['user'], data['pass'])
-			if status is True:
+			if pam.authenticate(data['user'], data['pass'], service='account'):
 				self.request.sendall(json.dumps({
 					'response': 'ok',
 					}))
@@ -77,13 +77,13 @@ class Decoder(SocketServer.BaseRequestHandler):
 
 
 def shutdown():
-	subprocess.Popen(['halt'])
+	subprocess.call(['halt'])
 
 def reload():
-	subprocess.Popen(['systemctl', 'restart', 'genesis'])
+	subprocess.call(['systemctl', 'restart', 'genesis'])
 
 def reboot():
-	subprocess.Popen(['reboot'])
+	subprocess.call(['reboot'])
 
 
 class Beacon():

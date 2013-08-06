@@ -5,75 +5,8 @@ import os
 import pam
 import json
 import socket
-import SocketServer
 import subprocess
-
-class BeaconServer(SocketServer.ThreadingTCPServer):
-	def __init__(self, server_address, RequestHandlerClass, bind_and_activate=True):
-		SocketServer.BaseServer.__init__(self, server_address,
-			RequestHandlerClass)
-		sslctx = OpenSSL.SSL.Context(OpenSSL.SSL.SSLv3_METHOD)
-		sslcert = '/etc/beacon/cert.pem'
-		sslkey = '/etc/beacon/pkey.key'
-		sslctx.use_privatekey_file(sslkey)
-		sslctx.use_certificate_file(sslcert)
-		self.socket = OpenSSL.SSL.Connection(sslctx, 
-			socket.socket(self.address_family, self.socket_type))
-		if bind_and_activate:
-			self.server_bind()
-			self.server_activate()
-
-	def shutdown_request(self, request):
-		request.shutdown()
-
-
-class Decoder(SocketServer.BaseRequestHandler):
-	def handle(self):
-		data = json.loads(self.request.recv(1024).strip())
-		if data['request'] == 'status':
-			f = open('/etc/hostname')
-			if os.path.exists('/var/run/genesis.pid'):
-				status = 'active'
-			else:
-				status = 'inactive'
-			self.request.sendall(json.dumps({
-				'response': 'ok',
-				'name': f.readline().strip('\n'),
-				'status': status,
-				}))
-			f.close()
-		elif data['request'] == 'reload':
-			if pam.authenticate(data['user'], data['pass'], service='account'):
-				self.request.sendall(json.dumps({
-					'response': 'ok',
-					}))
-				reload()
-			else:
-				self.request.sendall(json.dumps({
-					'response': 'fail',
-					}))
-		elif data['request'] == 'shutdown':
-			if pam.authenticate(data['user'], data['pass'], service='account'):
-				self.request.sendall(json.dumps({
-					'response': 'ok',
-					}))
-				shutdown()
-			else:
-				self.request.sendall(json.dumps({
-					'response': 'fail',
-					}))
-		elif data['request'] == 'reboot':
-			if pam.authenticate(data['user'], data['pass'], service='account'):
-				self.request.sendall(json.dumps({
-					'response': 'ok',
-					}))
-				reboot()
-			else:
-				self.request.sendall(json.dumps({
-					'response': 'fail',
-					}))
-		elif data['request'] == 'ping':
-			self.request.sendall(json.dumps({'response': 'ok'}))
+import threading
 
 
 def shutdown():
@@ -85,7 +18,68 @@ def reload():
 def reboot():
 	subprocess.call(['reboot'])
 
+def handle_client(sock):
+	data = json.loads(sock.recv(4096))
+	if data['request'] == 'status':
+		f = open('/etc/hostname')
+		if os.path.exists('/var/run/genesis.pid'):
+			status = 'active'
+		else:
+			status = 'inactive'
+		sock.sendall(json.dumps({
+			'response': 'ok',
+			'name': f.readline().strip('\n'),
+			'status': status,
+			}))
+		f.close()
+	elif data['request'] == 'reload':
+		if pam.authenticate(data['user'], data['pass'], service='account'):
+			sock.sendall(json.dumps({
+				'response': 'ok',
+				}))
+			reload()
+		else:
+			sock.sendall(json.dumps({
+				'response': 'fail',
+				}))
+	elif data['request'] == 'shutdown':
+		if pam.authenticate(data['user'], data['pass'], service='account'):
+			sock.sendall(json.dumps({
+				'response': 'ok',
+				}))
+			shutdown()
+		else:
+			sock.sendall(json.dumps({
+				'response': 'fail',
+				}))
+	elif data['request'] == 'reboot':
+		if pam.authenticate(data['user'], data['pass'], service='account'):
+			sock.sendall(json.dumps({
+				'response': 'ok',
+				}))
+			reboot()
+		else:
+			sock.sendall(json.dumps({
+				'response': 'fail',
+				}))
+	elif data['request'] == 'ping':
+		sock.sendall(json.dumps({'response': 'ok'}))
 
-class Beacon():
-	server = BeaconServer(('0.0.0.0', 8765), Decoder)
-	server.serve_forever()
+def serve_beacon():
+	sslctx = OpenSSL.SSL.Context(OpenSSL.SSL.SSLv3_METHOD)
+	sslcert = '/etc/beacon/cert.pem'
+	sslkey = '/etc/beacon/pkey.key'
+	sslctx.use_privatekey_file(sslkey)
+	sslctx.use_certificate_file(sslcert)
+
+	s = socket.socket()
+	s = OpenSSL.SSL.Connection(sslctx, s)
+	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+	s.bind(('0.0.0.0', 8765))
+	s.listen(1)
+
+	while True:
+		conn, address = s.accept()
+		thread = threading.Thread(target=handle_client, args=[conn])
+		thread.daemon = True
+		thread.start()

@@ -5,6 +5,7 @@ import os
 import pam
 import json
 import socket
+import ssl
 import subprocess
 import threading
 
@@ -82,29 +83,20 @@ def gencert(sslcert, sslkey):
 		OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, k))
 
 def serve_beacon():
-	sslctx = OpenSSL.SSL.Context(OpenSSL.SSL.SSLv3_METHOD)
 	sslcert = '/etc/beacon/cert.pem'
 	sslkey = '/etc/beacon/pkey.key'
 
 	if not os.path.exists(sslcert) or not os.path.exists(sslkey):
 		gencert(sslcert, sslkey)
 
-	try:
-		sslctx.use_privatekey_file(sslkey)
-		sslctx.use_certificate_file(sslcert)
-	except:
-		gencert(sslcert, sslkey)
-		sslctx.use_privatekey_file(sslkey)
-		sslctx.use_certificate_file(sslcert)
-
 	s = socket.socket()
-	s = OpenSSL.SSL.Connection(sslctx, s)
-	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 	s.bind(('0.0.0.0', 8765))
 	s.listen(1)
 
 	while True:
 		conn, address = s.accept()
-		thread = threading.Thread(target=handle_client, args=[conn])
+		cstream = ssl.wrap_socket(conn, server_side=True, certfile=sslcert,
+			keyfile=sslkey, ssl_version=ssl.PROTOCOL_TLSv1)
+		thread = threading.Thread(target=handle_client, args=[cstream])
 		thread.daemon = True
 		thread.start()
